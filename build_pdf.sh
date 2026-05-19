@@ -7,7 +7,7 @@ COMBINED=/tmp/garrytan-combined.md
 
 {
   cat README.md; echo -e "\n\n\\pagebreak\n\n"
-  for f in content/01-the-complexity-ratchet.md \
+  for f in content/00-original-article.md content/01-the-complexity-ratchet.md \
            content/02-verification-bottleneck.md \
            content/03-why-90-percent.md \
            content/04-three-executive-questions.md \

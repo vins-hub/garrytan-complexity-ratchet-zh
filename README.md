@@ -1,85 +1,93 @@
-# Garry Tan：複雜度棘輪 × 90% 測試覆蓋率（繁體中文精解版）
+# Garry Tan：AI Agent 複雜度棘輪 × 90% 測試覆蓋率（繁體中文精解版）
 
-> 來源：[@garrytan 推文 2054064931515855118](https://x.com/garrytan/status/2054064931515855118)
-> 譯註版本：v1.0 · 2026-05-19 · vins-hub/vinshub
-> 授權：以 CC BY-SA 4.0 釋出
-
----
-
-## 一句話濃縮
-
-> **AI agent 寫程式比人類快太多。瓶頸從「**生產**」搬到「**驗證**」。在 2026-2028 這 24 個月內，能贏的不是 agent 最快的公司，而是 guardrail 最強的公司——具體形式：把測試覆蓋率從 80% 拉到 90%。**
-
-> *"The companies that win the next 24 months won't be the ones with the fastest agents...They'll be the ones with the strongest guardrails."* — Garry Tan (Y Combinator CEO)
+> 來源：[@garrytan Article 2054064931515855118](https://x.com/garrytan/status/2054064931515855118)
+> 標題：**The AI Agent Complexity Ratchet: Why 90% Test Coverage Is Required**
+> 系列：Garry Tan AI Explainer Series 第 7 篇
+> 發表：2026-05-12 1:03 PM · 233.8K views
+> 譯註版本：**v2.0**（2026-05-19 經 SELF-VALIDATION 修正後重寫）
+> 授權：原文 Garry Tan · 譯註以 CC BY-SA 4.0 釋出
 
 ---
 
-## 為什麼這條改變了一切
-
-過去 20 年，軟體業的瓶頸是「**寫不夠快**」。所以工程師最值錢的能力是寫程式速度、設計能力、解難能力。
-
-2025 起，AI agent 已能 1 小時寫完人類 1 週的程式碼。**瓶頸不再是寫，是「**確保它沒寫壞**」**。
-
-這就是 Garry Tan 命名的「**複雜度棘輪（Complexity Ratchet）**」：
-
-> 每部署一個 feature，就增加依賴與 edge case，這些越來越難追蹤。當 AI agent 比人類快 10 倍時，這個棘輪轉得遠超人類驗證能力。**結果：你的 codebase 累積技術債的速度首次超過了人類有可能審查的速度。**
-
-**Garry 的處方**：把「**90% 自動化測試覆蓋率**」當作組織級的新基線。
-
-這份學習材料把這個處方拆解成可執行步驟。
+> ⚠️ **v2.0 修正聲明**
+>
+> v1.0 有 3 處重大錯誤：
+> 1. 「**執行長必問三大組織問題**」是我虛構的，原文無此結構
+> 2. 「**24 個月誰贏**」名言出自 Ali Ustun paraphrase，**不是 Garry 原話**
+> 3. **複雜度棘輪定義方向錯了**——原意是「Quality floor 只升不降」，不是「技術債只增」
+>
+> 詳細比對：[SELF-VALIDATION.md](SELF-VALIDATION.md) · [Ch 00 原文翻譯](content/00-original-article.md)
 
 ---
 
-## 心智模型
+## 一句話濃縮（修正版）
 
-```
-        AI Agent 時代之前                AI Agent 時代之後
-        ━━━━━━━━━━━━━━━━━━              ━━━━━━━━━━━━━━━━━━━━
+> **AI agent coding 寫的每行程式碼，都會「順便」寫測試 + 文件 + 評估。這 3 樣每 turn 累積進 context window，下一輪 agent 不能 regress、不能 ignore、不能降品質。Quality floor 只升不降，這就是「複雜度棘輪」——一個只能變好不能變差的系統。**
 
-        生產速度                          生產速度
-          ▲                                ▲ ▲ ▲ ▲ ▲ ▲  ← AI 10x
-          │                                │
-          │ 人類                            │ 人類驗證
-          │ 驗證能力                        │ 能力（不變）
-          │ ━━━━                           │ ━━━━
-          ▲                                ▲
-        生產速度                          ★ 缺口 = 複雜度棘輪 ★
+**金句（Garry 原話）**：
 
-        瓶頸：寫不夠快                    瓶頸：審不夠快
-        解法：請更多工程師                解法：90% 自動化測試 +
-                                              AI 寫測試
-```
+> *"Getting to 90% used to be a heroic effort. Now it's a Tuesday."*
+> 
+> 「過去達到 90% 覆蓋率是英雄壯舉，現在是星期二（隨便做做）。」
 
 ---
 
-## 核心三問（CEO / Tech Lead 必答）
+## 為何過去做不到 90%
 
-Garry 給組織領導層三個必須清楚回答的問題：
+「**為何 90% 不普及**」過去答案是：**人類沒這個意志力**。
 
-1. **What is our verification coverage on AI outputs?**
-   「我們對 AI 輸出的驗證覆蓋率是多少？」
-   
-2. **Where does the ratchet bite hardest — and is that where we deployed our first agent?**
-   「複雜度棘輪在哪裡咬最深？我們把第一個 agent 部署在那邊嗎？」
+工程師寫到第 14 個 edge case test 會無聊。週五下午 5 點不想再寫了。看到 gnarly integration test 就想「下次再說」。
 
-3. **Who owns catching regressions before they reach customers/citizens/patients?**
-   「誰負責在 regression 影響到客戶 / 民眾 / 病患之前抓到它？」
+**這不是技術問題，是人類耐力問題。**
 
-**如果你公司沒有人能 5 秒內回答這三題，你已經被棘輪追上**。
+Capers Jones 研究 10,000+ 軟體專案，發現 coverage 跟 defect removal efficiency（DRE）的關係**非線性**：
 
----
-
-## 為什麼是 90%（不是 80%、不是 100%）
-
-| 覆蓋率 | 評估 |
+| Coverage | DRE |
 |---|---|
-| < 60% | 不能上 production。任何 PR 都可能 silent breakage |
-| 60-79% | 過去 10 年業界中位數。AI 時代不夠 |
-| **80%** | **舊典範的 best practice**。人類維護 codebase 的甜蜜點 |
-| **90%** | **AI 時代的新基線**。AI 寫測試 ~= 免費，所以阻力消失 |
-| 95-100% | Diminishing returns。維護 cost 超過邊際效益。少數高風險系統值得（醫療 / 金融 / 太空） |
+| < 70% | 65-75% |
+| **85-95%** | **92-97%** ← knee 在 85% |
 
-**Garry 的論點**：過去 90% 不普及不是因為它技術上難，而是因為「**人類寫測試的意志力很貴**」。AI 把這個成本壓到接近零後，**90% 從「奢侈」變成「應有」**。
+從 70% 到 90% **不是 30% 改善，是一個數量級的缺陷escape 降低**。但**最後 20% 比前 70% 還難**（Mockus 等 Vista 研究）。
+
+**過去 90% 是航太、醫材獨享的奢侈**（DO-178C MC/DC + FDA），因為人類成本太高。
+
+---
+
+## AI agent 改變的真正關鍵
+
+不是「**AI 寫程式更快**」（那是 surface 觀察）。**是「AI 不感到 effort**」：
+
+> *"They don't get bored writing the fourteenth edge-case test. They don't cut corners at 5pm on a Friday. They don't look at a gnarly integration test and think 'I'll come back to this later.'"*
+>
+> 「（agent）不會寫第 14 個邊角 test 就無聊。不會在週五五點偷懶。不會看到 gnarly integration test 想說『下次再說』。」
+
+**過去阻止人類團隊停在 70% 的 effort curve，對 agent 不適用**。
+
+**90% 從「英雄級工程」變成「星期二」**。
+
+---
+
+## 複雜度棘輪：精確定義（修正版）
+
+每次 AI agent 工作 session 加 **3 樣**進 codebase：
+
+| # | 加什麼 | 角色 |
+|---|---|---|
+| **1** | **Tests** | 編碼「**正確**」的定義；每次有人改 code 都跑 |
+| **2** | **Documentation** | 編碼「**為何這樣決策**」的理由 + tradeoff |
+| **3** | **Evaluation results** | 編碼「**品質基線**」分數 |
+
+**下一輪 agent 工作時，這 3 樣都進 context window**。然後：
+
+- ❌ 不能 regress below test suite——tests 會 fail
+- ❌ 不能 ignore docs——它們就在 context
+- ❌ 不能 ship 低於 evaluation baseline——分數記錄在那
+
+> **Quality floor goes up with every turn. Forward-only motion. That's the ratchet.**
+>
+> 「品質地板每 turn 都升。只能往前走。這就是棘輪。」
+
+**注意**：這跟「**技術債只增**」**方向相反**——技術債是「**壞東西累積**」，棘輪是「**好基線累積**」。
 
 ---
 
@@ -87,50 +95,123 @@ Garry 給組織領導層三個必須清楚回答的問題：
 
 | 章節 | 內容 | 適合誰 |
 |---|---|---|
-| [01. 複雜度棘輪](content/01-the-complexity-ratchet.md) | 核心概念 + 為何 AI 時代是 inflection point | 所有工程 leader |
-| [02. 驗證瓶頸](content/02-verification-bottleneck.md) | 從「production bottleneck」到「verification bottleneck」 | 戰略層 |
-| [03. 為何 90% 是新基線](content/03-why-90-percent.md) | 數學論證 + AI 經濟學論證 | 想說服老闆的人 |
-| [04. 三大組織問題](content/04-three-executive-questions.md) | 三問的展開與診斷工具 | CEO / VPE / EM |
-| [05. 測試類型矩陣](content/05-test-types-matrix.md) | Unit / Integration / E2E / Property / Mutation / Fuzz | Tech Lead |
-| [06. AI 當測試作者](content/06-ai-as-test-writer.md) | 用 AI 寫測試的具體 SOP | 工程師 |
-| [07. 反模式：假測試陷阱](content/07-anti-patterns.md) | 80% 覆蓋率 ≠ 80% 品質 | 避免騙自己 |
-| [08. 12 週實施路線圖](content/08-implementation-roadmap.md) | 從 65% → 90% 的階段計畫 | 想實際執行的人 |
-| [09. 跟 12-factor agents 的關聯](content/09-relation-to-12-factor.md) | Verification 是 agent 工程化的必要條件 | 系統派 |
+| [00. 原文完整對照](content/00-original-article.md) | **Source of truth** — 英文原文 + 中文翻譯 | 想看一手資料的人 |
+| [01. 複雜度棘輪精確定義](content/01-the-complexity-ratchet.md) | 3 樣每 turn 累積機制 / Forward-only / 跟 tech debt 區別 | 所有讀者 |
+| [02. 驗證瓶頸](content/02-verification-bottleneck.md) | 從 production 到 verification 的歷史轉移 | 戰略層 |
+| [03. 為何 90% 是新基線](content/03-why-90-percent.md) | Capers Jones / DO-178C / Six Sigma / Mockus 真實數據 | 想說服老闆 |
+| [04. 三個實戰案例](content/04-three-executive-questions.md) | **(v2.0 重寫)** Holder Confusion / TTY Harness / OpenClaw Plugin | 想看 ratchet 怎麼運作 |
+| [05. 測試類型矩陣](content/05-test-types-matrix.md) | 6 種測試類型 + 比例分配 | Tech Lead |
+| [06. AI 當測試作者](content/06-ai-as-test-writer.md) | 6 個工作流 + Prompt 範本 | 工程師 |
+| [07. 假測試陷阱](content/07-anti-patterns.md) | 10 個反模式 + 自我檢查腳本 | 避免騙自己 |
+| [08. 12 週實施路線圖](content/08-implementation-roadmap.md) | 從 65% → 90% 階段計畫 | 想實際執行 |
+| [09. 跟 12-factor agents 的關聯](content/09-relation-to-12-factor.md) | Building × Verification 雙翼 | 系統派 |
 
 ---
 
-## 30 秒急救包
+## 真正的金句（從原文）
 
-如果你現在沒時間讀全部，做這 3 件事：
+整理 Garry 原話最值得記的 4 句：
 
-1. **查現狀**：你的 main repo 跑 `coverage report`，看數字。如果 < 80%，這是你的第一個 sprint 目標
-2. **訂目標**：在 CI 加 `--fail-under=85`（從現在的數字+5%），逐月拉到 90%
-3. **指派 owner**：選一個 Tech Lead 全權負責測試品質，賦予阻擋 PR 的權限
+> **1. "Tests are institutional memory that survives employee turnover."**
+> 「測試是在員工離職後仍存活的組織記憶。」
 
-剩下的可以慢慢讀。
+> **2. "Getting to 90% used to be a heroic effort. Now it's a Tuesday."**
+> 「過去達到 90% 是英雄壯舉，現在是星期二。」
+
+> **3. "AI coding works fine. They just didn't build the ratchet."**
+> 「AI 寫程式沒問題，只是他們沒造棘輪。」（針對「**vibecoding 失敗**」案例）
+
+> **4. "The question isn't whether you can afford 90%. It's whether you can afford not to."**
+> 「問題不是『**你負擔得起 90% 嗎**』，而是『**你負擔得起不做嗎**』。」
 
 ---
 
-## 為什麼這份指南對 2026 的工程組織重要
+## 個人 credibility 數據（Garry 親身證明）
 
-1. **AI agent 平均產出已超越中階工程師**：寫 code 不再是 bottleneck
-2. **大多數公司還用 2018-2023 的 testing playbook**：80% coverage、手動 review、定期 audit
-3. **複雜度棘輪在 6-12 個月內咬死你**：當 incident 多到讓 SRE 加班，已經晚了
+Garry 用兩個開源專案證明這套方法可行：
 
-Garry Tan 的方法論不是 nice-to-have，是 **defensive moat for the next 24 months**。
+| 專案 | 規模 | 性質 |
+|---|---|---|
+| **GStack** | 93K stars, 701K LoC, 46 skills, 37 contributors | AI coding agent framework |
+| **GBrain** | 14K stars, 25 contributors | Second brain for AI agents |
+| **合計** | **970,000 LoC, 665 test files** | 全由 Claude Code + Codex 寫（15 個同時 Conductor session）|
+
+**上週紀錄**：72 小時 merge 14 個 PR，29,000 行新 code，**每次 release 比上次測試更好**。
+
+「速度跟品質要 trade off」是過去的事。**現在不用選**。
+
+---
+
+## 「Everything Harnessable Is Testable」（測試擴展論）
+
+Garry 提出的重要洞察：測試**不只是 unit test**，是 5 個層次：
+
+| 層次 | 觀察什麼 | 範例 |
+|---|---|---|
+| **OS** | process tree / file system / cron | migration 有沒有建對表？cron 有沒有 fire？ |
+| **Terminal** | 每個 keystroke / interactive prompt | AI agent 有沒有在跑 review skill 時 ask question？|
+| **Browser** | rendered page / button state / navigation | 頁面 render 對嗎？form 填對嗎？ |
+| **API** | structured response / schema | model 回的 JSON schema 對嗎？|
+| **Agent behavioral** | 說什麼 / call 什麼 tool / 順序 / 是否事前 ask | agent 有沒有照 protocol？刪除前有沒有確認？|
+
+> **「If you can observe it, you can assert on it. If you can assert on it, you can ratchet it.」**
+
+---
+
+## 30 秒急救包（修正版）
+
+1. **理解定義**：棘輪是「好基線只升」，不是「壞東西鎖住」
+2. **問自己**：你 codebase 每個 PR 是不是都加了 (test + doc + eval)？
+3. **如果不是**：去 [Ch 08 路線圖](content/08-implementation-roadmap.md) 第一週開始
+4. **如果是**：去 [Ch 09](content/09-relation-to-12-factor.md) 把這跟 12-factor agents 整合
+
+---
+
+## 反例：Vibecoding 沒做 ratchet → 死
+
+> *"Most vibecoded projects that skip tests start falling apart once they reach moderate complexity — a few thousand lines, a handful of interacting features."*
+> 
+> 「多數 vibecoded（Karpathy 提的術語）專案 skip tests，到中等複雜度（幾千行 + 幾個 feature）就解體。」
+
+> *"By version 0.5 the codebase is a haunted house where every change breaks something unexpected."*
+>
+> 「V0.5 後 codebase 是『**鬧鬼的房子**』——每次改動都壞別處。」
+
+> *"AI coding works fine. They just didn't build the ratchet."*
 
 ---
 
 ## 譯註者觀察
 
-Garry 這條推文之所以重要，是因為他是**少數同時看 YC 上百家新創 + 自己用 AI 大量寫程式**的人。他看到的不是理論，是 portfolio 公司的真實發病。
+Garry Tan 這篇 article 是「**AI 時代 production-grade 軟體**」的最重要論述之一，但**中文社群討論度極低**。
 
-他的處方有個特點：**便宜、可量化、可立即執行**。不需要新工具、不需要新框架、不需要組織重構——只需要**把 coverage 數字當作 production 指標**。
+它跟 [Dex Horthy 的 12-factor agents](https://github.com/vins-hub/12-factor-agents-zh) 跟 [Karpathy 的 +HTML 方法](https://github.com/vins-hub/karpathy-structure-as-html-zh) 構成 **2026 AI 應用方法論三大支柱**：
 
-這份指南把這個處方擴展成 12 週可執行路線圖。
+| 三大支柱 | 提出者 | 角色 |
+|---|---|---|
+| **12-factor agents** | Dex Horthy | 怎麼建造 agent |
+| **+HTML output** | Karpathy / Thariq | 怎麼呈現 LLM 輸出 |
+| **Complexity Ratchet + 90% coverage** | Garry Tan | 怎麼驗證 AI 產出 |
+
+讀完這三份精解，你會擁有 production-grade AI 應用的完整方法論。
+
+---
+
+## 修正歷史
+
+| 版本 | 日期 | 動作 |
+|---|---|---|
+| v1.0 | 2026-05-19 (16:27) | 第一版，根據 Ali Ustun LinkedIn paraphrase 寫，**有 3 處虛構** |
+| **v2.0** | **2026-05-19 (17:00+)** | **用 gstack/browse 讀原文後重寫，修正核心定義 + 刪虛構章節 + 補實戰案例 + 補真實數據** |
+
+詳見 [SELF-VALIDATION.md](SELF-VALIDATION.md)。
 
 ---
 
 ## 接下來
 
-➡️ [Chapter 01: 複雜度棘輪 — 為何 AI 時代是 inflection point](content/01-the-complexity-ratchet.md)
+➡️ [Chapter 00: 原文完整對照](content/00-original-article.md) — **強烈建議先讀這個**，再讀後續詮釋
+
+或
+
+➡️ [Chapter 01: 複雜度棘輪精確定義](content/01-the-complexity-ratchet.md)

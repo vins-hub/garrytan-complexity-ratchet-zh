@@ -1,239 +1,288 @@
 [← 回 README](../README.md) · [← Ch 03](03-why-90-percent.md)
 
-# 第 04 章：三大組織問題 — 三問的展開與診斷工具
+# 第 04 章：三個實戰案例 — Ratchet 怎麼運作（v2.0 重寫版）
 
-> **核心句**：Garry Tan 的三大問題不是修辭，是診斷工具。任何組織只要 5 秒內回答不出來，就已經被棘輪追上。本章把這三問展開成可量化、可執行的組織體檢表。
+> ⚠️ **v1.0 訂正**：本章 v1.0 是「**執行長必問三大問題**」——**那 3 個問題是我虛構的，原文無此結構**。v2.0 完全重寫為 Garry 在文章裡親自舉的 3 個實戰案例，這才是文章的精華。
 
----
-
-## 三問原文
-
-> 1. What is our **verification coverage** on AI outputs?
-> 2. Where does the **ratchet bite hardest** — and is that where we deployed our first agent?
-> 3. **Who owns** catching regressions before they reach customers/citizens/patients?
-
-每一問都對應組織的一個 critical 維度：
-
-| 問 | 維度 | 失敗後果 |
-|---|---|---|
-| Q1 | **能力**：你有沒有看 AI 產出的能力 | 不知道 AI 在做什麼 |
-| Q2 | **戰略**：你把資源放在哪 | 棘輪在 A，agent 在 B，白做 |
-| Q3 | **究責**：誰負責 | 沒人 own → 永遠救火 |
+> **核心句**：Ratchet 不是抽象概念，是具體機制。Garry 在原文示範了 3 個真實案例：每個都展示「**問題出現 → 加 (test + doc + eval) → quality floor 永久升一格**」的完整 turn。
 
 ---
 
-## Q1：What is our verification coverage on AI outputs?
+## 為何案例比理論重要
 
-### 字面拆解
+Garry 整篇 article 的精華是這 3 個 case：
 
-**Verification coverage on AI outputs** ≠ **code coverage**。Garry 問的不只是「**多少行被測試到**」，是**完整的驗證鏈**：
-
-| 層次 | 對 AI 產出的驗證 |
-|---|---|
-| L1：寫進 PR | 有沒有 type check、lint、static analysis pass？ |
-| L2：自動測試 | 有沒有 unit / integration / E2E 跑過？ |
-| L3：人類審 | 有沒有 senior 看過邏輯與設計？ |
-| L4：staging | 有沒有在類似 prod 環境跑過？ |
-| L5：canary | 有沒有用真實流量小規模驗證？ |
-| L6：監控 | Production 有沒有監控覆蓋？ |
-
-**Verification coverage = 6 個層次都做到的比例**。
-
-### 診斷表：你的 verification coverage 真實分數
-
-填這個表（誠實）：
-
-| 維度 | 目標 | 你目前 | gap |
+| 案例 | 系統 | 問題 | 解法 |
 |---|---|---|---|
-| L1: 100% PR 通過 lint + type check | 100% | __% | __ |
-| L2: aggregate test coverage | 90% | __% | __ |
-| L2: mutation score | 75% | __% | __ |
-| L2: critical path test coverage | 100% | __% | __ |
-| L3: 100% PR 有人類 reviewer | 100% | __% | __ |
-| L3: 平均 review SLA | < 24h | __h | __ |
-| L4: PR 必先過 staging | 100% | __% | __ |
-| L5: prod 部署用 canary / feature flag | 100% | __% | __ |
-| L6: critical service 有 alert | 100% | __% | __ |
+| 1. **Holder Confusion** | GBrain | LLM 抽取信念時 35% 認錯人 | 6 種 failure mode 文件化 + 17 測試 + DB 層強制 weight rounding |
+| 2. **TTY Test Harness** | GStack | Claude Code 跳過互動 review 環節 | 3 層 ratchet（STOP gates + anti-shortcut + TTY 測試）|
+| 3. **OpenClaw Plugin Test** | GStack | 怎麼測 plugin 真的能載入 | 359 行 end-to-end 跨兩個程式測試 |
 
-**任何維度 < 80% 都是「**verification 缺口**」**。
-
-### Q1 的隱含結論
-
-如果你回答不出每個維度的數字，**你的組織連自己的 verification gap 都不知道**。第一步是**測量**：用 [Ch 08 路線圖](08-implementation-roadmap.md) 的 Week 1-2 行動。
+讀完這 3 個你會理解：**ratchet 不是「**加更多 unit test**」，是「**為每個 lesson learned 鎖住一個可執行檢核**」**。
 
 ---
 
-## Q2：Where does the ratchet bite hardest — and is that where we deployed our first agent?
+## 案例 1：Holder Confusion（GBrain epistemological extraction）
 
-### 字面拆解
+### 系統背景
 
-兩個子問題：
-1. 棘輪在哪裡咬最深？（識別風險區）
-2. 你的第一個 AI agent 在這裡嗎？（驗證部署優先級）
+**GBrain** 是 Garry 在做的 second brain for AI agents——讓 AI agent 有長期記憶，儲存 / index / search 一個人的 note / meeting / 對話 / research。「**你 AI 助手可以真的讀的第二大腦**」。
 
-如果 1 跟 2 不匹配，**你的 AI 部署戰略錯了**。
+其中一個 feature 叫 **epistemological extraction**（認識論抽取）：
 
-### 找出 ratchet bite hardest 的方法
+> 它讀過幾千頁，抽取「**誰相信什麼**，**信心多高**，**隨時間怎麼變**」。
+>
+> 例子：
+> - "Garry thinks Bitcoin will hit $300K (confidence: 0.45)"
+> - "Jared thinks this startup has strong retention (confidence: 0.80)"
+>
+> 規模：**28,000 頁** 跨多人。
 
-3 個資料源：
+### 問題
 
-#### 資料源 1：Incident 歷史
+第一次 run 抽取出 **100,720 個 claims**。
 
-過去 12 個月所有 P0 / P1 incident，按系統分類：
+Garry 用 **cross-model evaluation** 評估品質（GPT-5.5 + Claude **獨立**評分）：
+
+> **總分：6.8 out of 10**
+
+最大問題是 **holder confusion**（持有者混淆）。
+
+具體例子：claim「**AI will replace 80% of software engineers by 2027**」。
+
+**問題**：**誰**相信這件事？
+- 是寫這句話的人？
+- 是他在引用的某個其他人？
+- 是系統的 analysis engine 從 podcast 推論的？
+
+**V1 對這個區分 35% 答錯**。
+
+對「**追蹤誰相信什麼**」的系統來說，搞錯 holder 等於整個系統失去意義。
+
+### Ratchet 三段式解法
 
 ```
-系統 A: 8 次 P1
-系統 B: 3 次 P1
-系統 C: 12 次 P1  ← bite hardest
-系統 D: 1 次 P1
-系統 E: 5 次 P1
+Step 1: Documentation
+   6 種 failure mode 識別出來 + 寫成文件
+   
+Step 2: Tests
+   17 個測試鎖住合約
+   
+Step 3: Architecture
+   Weight rounding 在 DB layer 強制
+   (不允許 0.74 這種假精度，必須 round 到 0.05 增量)
 ```
 
-C 是 ratchet 咬最深的地方——bug 一直冒。
+### Ratchet 效果
 
-#### 資料源 2：MTTR（Mean Time To Recovery）
+> *Now no future version of the extraction can ship without those 17 tests passing.*
+>
+> 「未來任何版本的 extraction 不通過那 17 個測試就不能 ship。」
 
-```
-系統 A: 平均 30 min
-系統 C: 平均 3 hours  ← 不只 bug 多，而且難修
-系統 D: 平均 15 min
-```
+> *Nobody has to remember why weight rounding matters or what holder confusion is.* 
+> 
+> 「沒人需要記住為何 weight rounding 重要、什麼是 holder confusion。」
 
-C 同時兼具「**bug 多 + 難修**」——典型 ratchet 困境。
+> **The tests remember.**
+> **「測試記得。」**
 
-#### 資料源 3：「不敢動」清單
+**品質地板從此永遠 ≥ 6.8/10**。一個 turn 的 ratchet 完成。
 
-問 senior engineers：「哪些 module 你**不敢**改？」答案會集中在 1-3 個 module。**那就是 ratchet bite hardest 的地方**。
+### 拆解：ratchet 的 3 樣對應
 
-### Q2 的具體 action
-
-**將 3 個資料源交集**，挑出 top 3 ratchet 區。**你的第一個 AI agent 應該部署在這裡——但是部署成「**測試生成 agent**」，不是「**feature 生成 agent**」**。
-
-| 順序 | 你做的事 |
+| Ratchet 3 樣 | 在這案例的具體形式 |
 |---|---|
-| 第 1 個 agent | 為 top 1 ratchet 區寫測試的 agent |
-| 第 2 個 agent | 為 top 2 ratchet 區寫測試的 agent |
-| 第 3 個 agent | 為 top 1 區寫 monitoring / alert 的 agent |
-| 之後 | 才開始 feature-writing agent |
+| **Tests** | 17 個測試 |
+| **Documentation** | 6 種 failure mode 文件化 |
+| **Evaluation** | Cross-model eval 6.8/10 baseline，下一版要 ≥ 這個 |
 
-**反直覺**：別人都在用 AI 寫 feature，**你應該先用 AI 補防線**。
+完整對齊 [Ch 01](01-the-complexity-ratchet.md) 的精確定義。
 
 ---
 
-## Q3：Who owns catching regressions before they reach customers?
+## 案例 2：TTY Test Harness（GStack interactive review）
 
-### 字面拆解
+### 系統背景
 
-**Who owns** 是 organizational accountability。「**測試是大家的事**」=「**沒人負責**」。
+**GStack** 是 Garry 的開源 AI coding agent framework——93K stars / 701K LoC / 46 skills。
 
-### 三種 ownership 模式
+核心 feature 之一：**interactive plan review**。
 
-| 模式 | 結構 | 問題 |
-|---|---|---|
-| **Distributed**（散落） | 每個工程師寫自己的測試 | 無人總攬，品質參差，棘輪悄悄轉 |
-| **Centralized**（集中） | QA 團隊負責所有測試 | 開發跟測試脫節，QA 反應慢，瓶頸 |
-| **★ Hybrid**（混合） | 每個 PR 作者寫測試 + 中央 platform team 設標準與工具 | 規模化、有 oversight |
+> 你叫它 review 你的架構，它**一段一段走 plan**，**問問題**、**戳 edge case**、**挑戰你的假設**。像有個真的會讀 code 的 engineering manager。
 
-**Garry 推 Hybrid**。具體形式：
+### 問題
 
-#### 角色設計
+Claude Code 有時候會**跳過整個互動環節**：
+
+- 讀完 plan 檔
+- 把所有 findings 一次性 dump 出來
+- 直接 exit
+- **沒問用戶任何問題**
+
+**Interactive review 的整個 point 就是來回對話。跳過 = 失去意義。**
+
+### 反問：怎麼測這個？
+
+> *How do you even test that? You can't unit test "did the AI have a conversation."*
+>
+> 「**這要怎麼測**？你沒辦法 unit test『**AI 有沒有跟你對話**』。」
+
+**沒有任何 traditional testing framework 涵蓋這個**。
+
+### Garry 的解法：TTY Test Harness（PR #1354）
+
+用 **Bun 的 TTY 功能**建測試 harness：
+
+1. **Spawn Claude Code 進 pseudo-terminal**（pty）
+2. **餵特定 repo 場景**
+3. **觸發 review skill**
+4. **即時 watch terminal output**
+5. **觀察 agent 有沒有 fire interactive question 在 finish 之前**
+6. 如果 dump findings 後直接 exit，**測試 fail**
+
+> *That's not testing code. That's testing whether an AI agent follows a behavioral contract. At the TTY level. By literally watching it work.*
+>
+> 「這不是測 code。是測 **AI agent 有沒有遵守行為合約**。**在 TTY 層級**。**真的看著它工作**。」
+
+### Ratchet 3 層回應
 
 ```
-[Engineering team]                  [Platform / Quality team]
-   ↓                                    ↓
-寫 feature code                     設計測試 framework / fixture
-寫 first-pass tests                   設計 CI gate 標準
-跑 local tests                        負責 mutation testing infra
-PR submit                             跑 nightly extensive test suite
-                                      設計 verification SOPs
-                                      負責 80% → 90% migration
-                                      負責 AI test generation 工具
-                                      負責 metric 收集與報告
-                                      ★ HAS POWER TO BLOCK ★
+Layer 1: STOP gates 在 skill instructions
+   - 明文規則：「你 MUST 在進下一段之前 ask user」
+   - Anti-rationalization 條款：明確命名 failure mode
+   - 讓 model 沒辦法說服自己「**這次跳過 OK**」
+
+Layer 2: Anti-shortcut clause
+   - 一句話：「**The plan file is the OUTPUT of the interactive review, 
+            not a substitute for it**」
+   - 「plan 檔是 interactive review 的『**輸出**』，不是『**替代**』」
+   - 封死 model 一直在 exploit 的特定 loophole
+
+Layer 3: Gate-tier floor tests（核心）
+   - TTY harness 測試
+   - 在 controlled scenario spawn Claude Code
+   - 如果 agent 沒問至少一個 interactive question 就 fail
 ```
 
-**關鍵點**：Platform/Quality team **必須有阻擋 PR 的權力**。沒這權力，他們建議會被無視。
+### Ratchet 效果
 
-### Q3 的具體 action
+> Anthropic ship 新 model 版本，或我改 skill prompt，**測試會抓**「interactive contract」的任何 regression。
+>
+> **Agent 不能靜悄悄停止問問題。測試在看 terminal**。
 
-3 個 hire / appoint 任務：
+**Quality floor 永遠 ≥「**至少問一個 interactive question**」這個合約**。
 
-| Hire | 職責 | Headcount（每 50 工程師） |
-|---|---|---|
-| Quality Engineer | 設計測試標準 / 工具 / fixture | 1-2 個 |
-| Verification Architect | 設計 verification system（CI / mutation / canary）| 1 個 |
-| Reliability lead | 連結 verification 跟 production reliability | 1 個 |
+### 為何這案例革命性？
 
-**這些不是新角色**，他們以前都叫 "QA"、"Build engineer"、"SRE"。**Garry 的洞察**：在 AI 時代，**這些角色從「**second-class**」變成「**first-class**」**——薪水、地位、影響力都要跟 senior dev 持平。
+過去測試思維：「**code 在做我想要的事嗎？**」
+TTY harness 思維：「**AI agent 在遵守我定義的協議嗎？**」
 
----
-
-## 三問檢核表
-
-填這個表，每題 0-10 分（10 = 完全做到）：
-
-| 問題 | 子項 | 分數 |
-|---|---|---|
-| **Q1**：verification coverage | L1-L6 6 個層次平均 | __/10 |
-| Q1 | 知道每個系統的 coverage 數字 | __/10 |
-| Q1 | 有 mutation testing | __/10 |
-| **Q2**：知道 ratchet 在哪 | 有 incident 歷史分析 | __/10 |
-| Q2 | 有 MTTR 數據 | __/10 |
-| Q2 | 第一個 AI agent 部署在 ratchet 區 | __/10 |
-| **Q3**：有人 own | 有 quality team | __/10 |
-| Q3 | Quality team 有阻擋 PR 權 | __/10 |
-| Q3 | Senior 級別的 verification ownership | __/10 |
-
-**總分判讀**：
-
-| 區間 | 評估 |
-|---|---|
-| 80-90 | 你已進入 AI 時代 |
-| 60-79 | 還在追趕，加速 |
-| 40-59 | 棘輪在咬你，急救 |
-| < 40 | 緊急狀態，立即啟動 [Ch 08 路線圖](08-implementation-roadmap.md) |
+這是「**測試的擴展定義**」——從「**code 行為**」延伸到「**agent 行為**」。
 
 ---
 
-## 三問背後的世界觀
+## 案例 3：OpenClaw Plugin Test（PR #880）
 
-這三問的共同精神：
+### 背景
 
-> **AI 不是省人力工具，是 leverage 放大鏡——你過去 strong 的地方會被放大，weak 的地方也會被放大**。
+GStack 生態加了個新的 **OpenClaw plugin**。
 
-過去 verification 弱的組織，AI 時代會被棘輪咬死。
-過去 verification 強的組織，AI 時代會把優勢放大成壟斷。
+問題：「**plugin 真的能載入跑嗎**」**怎麼測**？
 
-**這是「**未來 24 個月誰贏**」的本質**。
+### 傳統做法（不夠）
+
+- Unit test：plugin code 編得過
+- 但**這只證明 compile 過**，**沒證明 runtime 跑得起來**
+
+### Garry 的解法：359 行 end-to-end test
+
+測試流程（在 PR #880 裡）：
+
+```
+1. Build plugin from source
+2. Spawn 真的 OpenClaw instance in isolated profile
+3. Install plugin via CLI
+4. Run `plugins inspect` → verify runtime 載入了
+5. Set config slot
+6. Validate config
+7. Run `plugins doctor` → confirm zero diagnostics
+```
+
+**完整 end-to-end，跨兩個獨立程式**。
+
+> *359 lines of test code. The kind of test a human would almost never write by hand because the setup is too tedious. Claude wrote it in about five minutes. That's the effort wall disappearing in real time.*
+
+「359 行測試 code。**人類幾乎不可能手寫這種測試**——setup 太繁瑣。Claude 5 分鐘寫完。**這就是 effort wall 即時消失**。」
+
+### 為何這個案例最具標誌性
+
+它示範了 Garry 整篇 article 的 **terminal insight**：
+
+> **The brutal last 20% that made 90% coverage impractical for human teams is exactly the kind of work AI agents are best at.**
+>
+> 「過去讓 90% 覆蓋率不切實際的『**最後 20% 殘酷工作**』，**正是 AI agent 最擅長的**。」
+
+**人類 hate 寫的 boilerplate-heavy / setup-heavy / end-to-end test**——agent **完全不介意**。
+
+這把過去「**90% 是航太 / 醫材獨享奢侈**」的格局打破。**現在每個 startup 都應該 90%**。
 
 ---
 
-## 給 CEO / CTO 的 1 分鐘版本
+## 三個案例的共同 pattern
 
-如果你只有 1 分鐘跟 CEO 簡報這章，講這個：
+| Step | Case 1 (Holder Confusion) | Case 2 (TTY Harness) | Case 3 (OpenClaw Plugin) |
+|---|---|---|---|
+| **發現問題** | V1 35% 認錯 holder | Claude Code 跳過 interactive | 不確定 plugin 載入 |
+| **加 Doc** | 6 種 failure mode 文件化 | Anti-shortcut clause | (PR 描述 + skill doc) |
+| **加 Test** | 17 個合約測試 | TTY harness + STOP gate | 359 行 end-to-end |
+| **加 Eval** | Cross-model 6.8/10 baseline | 「至少問一個 question」可驗證 | `plugins doctor` 0 diagnostics |
+| **Ratchet 效果** | 未來 extraction ≥ 6.8/10 | 未來 review 必問 question | 未來 plugin 必通過 e2e |
+| **Quality floor 升** | ✓ | ✓ | ✓ |
 
-> 「**老闆，我們有三個必須回答的問題：**
-> 
-> **(1) 我們對 AI 產出的驗證覆蓋率是多少？**——如果 5 秒內答不出來，我們已經輸了。
-> 
-> **(2) 我們最大的技術風險在哪？我們的第一個 AI 部署在那邊嗎？**——如果 agent 部署的位置 ≠ 風險位置，我們配置錯誤。
-> 
-> **(3) 誰負責在 production 出問題前抓到？**——如果沒人 own，我們的命運是運氣。
-> 
-> 這三個問題之外，所有 AI 策略討論都是次要的。」
+每個案例都符合「**3 樣加進 codebase，下一輪 agent 不能 regress**」的精確機制（[Ch 01](01-the-complexity-ratchet.md)）。
 
 ---
 
-## 本章小結
+## 對你 codebase 的啟發
 
-| 問 | 量化形式 | 立即 action |
-|---|---|---|
-| Q1：verification coverage | 6 個層次 ≥ 90% | 測量 + 設 CI gate |
-| Q2：ratchet bite hardest | Incident / MTTR / 不敢動清單交集 | 部署測試 agent 到該區 |
-| Q3：who owns | Hybrid model + Quality team with power | Hire / appoint Q-arch |
+讀完這 3 個案例，問自己：
+
+1. **過去 3 個月你 codebase 出過什麼 incident / bug / feedback？**
+2. **每個都有對應的 (test + doc + eval) 鎖住嗎？**
+
+如果沒有，那 incident 會再發生——因為 ratchet 沒造好。
+
+具體 action：
+- 拉 incident log
+- 每個 incident 寫一段 ratchet 三件套（test / doc / eval）
+- 加進 codebase + CI gate
+- **下一個 incident 不會是同一個**
+
+這就是「**把 ratchet 從理論變成你 codebase 的實踐**」。
+
+---
+
+## 為何 v1.0「執行長三大問題」是錯的
+
+v1.0 Ch 04 結構（**虛構**）：
+
+```
+❌ Q1: What is our verification coverage on AI outputs?
+❌ Q2: Where does the ratchet bite hardest?
+❌ Q3: Who owns catching regressions?
+```
+
+**問題**：
+1. 這 3 個問題**原文不存在**——我憑空編的「顧問式 framing」
+2. 問題本身**朝錯方向**——把 ratchet 當「**防爆機制**」（咬最深的地方需要 own），原意是「**升品質機制**」
+3. 引導讀者**找 risk 區域去防**，而原意是「**讓每個 turn 自動加 3 樣**」——是常態，不是 risk 響應
+
+**v2.0 改成「**3 個實戰案例**」**才忠於原文：你不是在管理 risk，你是在**每次 agent session 自動讓品質升一格**。
 
 ---
 
 ## 接下來
 
-➡️ [Chapter 05: 測試類型矩陣](05-test-types-matrix.md)
+➡️ [Chapter 05: 測試類型矩陣](05-test-types-matrix.md) — 6 種測試類型怎麼搭配
+
+（v1.0 Ch 05-09 內容大致正確，是延伸應用，不需重寫）

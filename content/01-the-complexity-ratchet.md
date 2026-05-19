@@ -1,162 +1,196 @@
-[← 回 README](../README.md)
+[← 回 README](../README.md) · [← Ch 00 原文](00-original-article.md)
 
-# 第 01 章：複雜度棘輪 — 為何 AI 時代是 Inflection Point
+# 第 01 章：複雜度棘輪精確定義（v2.0 修正版）
 
-> **核心句**：每個 feature 部署，都把 codebase 的複雜度往上推一格、且**鎖住不能往下**——這就是 ratchet（棘輪）。AI agent 把這個棘輪轉動速度提高 10 倍，**人類驗證能力不變**，缺口就是當前最致命的工程風險。
-
----
-
-## 什麼是 ratchet（棘輪）
-
-棘輪是個機械零件：可以往一個方向轉，但有齒輪鎖住，**不能反向**。
-
-軟體裡的「**複雜度棘輪**」意思：
-
-| 動作 | ratchet 方向 | 為何不能反向 |
-|---|---|---|
-| 部署一個新 feature | 複雜度 +1 | 用戶開始依賴，移除 = breaking change |
-| 加一個 API endpoint | 依賴關係 +1 | 下游服務開始呼叫，下架要協調 |
-| 加一張 database 表 | schema 複雜度 +1 | 開始有資料、開始有 query、開始有 ORM mapping |
-| 加一個 config flag | 配置矩陣 ×2 | 兩個值都得測試 |
-| 加一個 conditional branch | 程式路徑 ×2 | 兩條路徑都得驗證 |
-
-**這些「+1」單個看都不大，但累積起來就是指數爆炸**。一個 100K 行的 codebase 可能有 2^30 條可能的 program path——人類**根本不可能**全部驗證。
+> **核心句**：複雜度棘輪是「**只能往一個方向動**」的機制——但這個方向是「**品質往上**」，不是「**技術債往上**」。每次 AI agent coding session 加 3 樣（tests + docs + evals）進 codebase，下一輪不能 regress 低於這個 baseline，於是 quality floor 只升不降。
 
 ---
 
-## AI Agent 加速棘輪
+## v1.0 錯了什麼
 
-過去：
+v1.0 把「棘輪」描述成「**部署一個 feature 就鎖住複雜度只增不減**」。
 
-```
-Human dev 一週寫 1 個 feature → 每週棘輪 +1
-Human reviewer 一週審 1-2 個 feature → 跟得上
-```
+**這是錯的**。那是 **tech debt** 的定義，不是 ratchet。
 
-AI agent 時代：
+Garry 原文：
 
-```
-AI agent 一天寫 5 個 feature → 每天棘輪 +5
-Human reviewer 一週還是審 1-2 個 → 跟不上
-```
+> *A ratchet is a mechanism that allows motion in one direction only. A socket wrench turns a bolt forward and prevents it from turning back.*
 
-**Gap = (5×5 - 2) = 23 個 feature 的「未驗證債」每週累積。**
+棘輪是「**只能往前不能往後**」。**問題是「往前」是什麼方向？**
 
-3 個月後，你 codebase 有 ~300 個未充分驗證的 feature 在 production。**這就是 ratchet bite hardest 的時刻**。
+**Garry 的答案**：往「**品質更好**」的方向。
+
+> *The quality floor goes up with every turn. Forward-only motion. That's the ratchet.*
+
+棘輪保證的是**好的基線只能升**，不是「**所有東西都鎖住不能改**」。
 
 ---
 
-## 為何不能「先快後審」
+## 精確機制：每 turn 加 3 樣
 
-❌ **錯誤直覺**：「先讓 AI 衝產量，之後再補 review。」
+Garry 原文最關鍵的一段：
 
-問題：
-1. **棘輪鎖住**：上線後用戶開始用，補 review 發現問題 → fix 變成 breaking change → coordination cost 暴增
-2. **複合債務**：未驗證 feature 之間互相依賴，越補越亂
-3. **Onboarding 災難**：新工程師看不懂 codebase
-4. **Incident 雪崩**：到某個臨界點，每天都有事故
+> *In agent-coded software, every coding session with an AI agent adds three things to the codebase:*
+>
+> *1. Tests that encode what "correct" means — automated checks that run every time someone changes the code, and fail loudly if the change breaks something*
+>
+> *2. Documentation that records why decisions were made — not just what the code does, but the reasoning and tradeoffs behind it*
+>
+> *3. Evaluation results that establish quality thresholds — structured assessments of output quality with scores, so you know if the next version is better or worse*
 
-✅ **正解**：**驗證能力先於產出能力**。先把驗證 baseline 拉高，**再**讓 AI agent 全速產出。
+**翻譯**：在 agent 寫的軟體裡，**每次跟 AI agent 的 coding session 加 3 樣到 codebase**：
 
----
+### 第 1 樣：Tests
 
-## 棘輪在哪些地方咬最深？
+**編碼「**正確**」的定義**——自動化檢查，每次有人改 code 就跑，壞了就大聲 fail。
 
-Garry 的觀察（從 YC portfolio 中常見的失敗模式）：
+> *"Tests encode what 'correct' means."*
 
-### 1. **業務邏輯層（business logic）**
-- AI 改了 pricing 計算，沒人發現
-- AI 改了 permission check，安全洞
-- AI 改了狀態機 transition，產生不可達狀態
+注意這個詞：「**encode**」（編碼）。測試不只是「**檢查**」工具，是「**正確性規範的可執行形式**」。
 
-### 2. **資料 schema 變遷**
-- AI 加 column 但忘記 migration
-- AI 改 column type 但下游 service 沒同步
-- AI 加 index 但忘了 production-scale 影響
+### 第 2 樣：Documentation
 
-### 3. **整合層（integrations）**
-- AI 改 API contract 但 client 沒同步
-- AI 加 webhook 但沒處理 retry/idempotency
-- AI 加 timeout 但 ripple effect 到其他 service
+**記錄「**為何這樣決定**」的理由**——不只是 code 在做什麼，是**背後的推理與 tradeoff**。
 
-### 4. **配置與 feature flag**
-- AI 加 feature flag 但忘了清除舊路徑
-- AI 改預設值但沒測試非預設值情境
-- AI 加 env var 但 docs / staging / prod 不同步
+注意這跟一般「**註解**」的差別。一般註解講 *what*；Garry 強調的 doc 講 *why*。
 
-### 5. **「無聲失敗」場景**
-- AI 加 error handling 但 silent swallow exception
-- AI 加 retry logic 但無限循環
-- AI 加 cache 但 invalidation 邏輯錯
+### 第 3 樣：Evaluation results
 
-**這 5 個區域**就是「**ratchet bite hardest**」的具體位置。**你公司部署第一個 AI agent，應該優先針對其中之一加強驗證——不是隨機選用例**。
+**建立品質閾值的分數記錄**——有結構的輸出品質評估，附分數，**讓你知道下一版是更好或更壞**。
+
+這比較陌生。例子：
+- 用 GPT-5.5 + Claude cross-model 給某個 prompt 的輸出打分（6.8/10）
+- 用 mutation testing 給測試品質打分（mutation score 78%）
+- 用 LLM-as-judge 評估 chat agent 回答品質（4.2/5）
+
+**Evaluation 是「**品質的可量化記錄**」**——能比較版本好壞，不只是「**對/錯**」。
 
 ---
 
-## Inflection Point 的判斷指標
+## 為何這 3 樣合在一起就是棘輪？
 
-什麼時候你公司「**進入 ratchet 困境**」？看這幾個信號：
+> *The next time an agent works on the codebase, it loads all three into its context window. It can't regress below the test suite — the tests would fail. It can't ignore the documentation — it's right there in context. It can't ship quality below the evaluation baseline — the scores are recorded.*
 
-| 信號 | 意義 |
+**下一輪 agent 工作時**：
+
+| 攻擊角度 | 防線 |
 |---|---|
-| Bug count 連續 3 個月上升 | 棘輪轉得比 fix 快 |
-| Incident 平均解時間（MTTR）變長 | codebase 已經沒人完全理解 |
-| 新人 onboarding > 3 個月才能 first deploy | 複雜度超過合理範圍 |
-| PR review 平均 > 48 小時 | reviewer 跟不上 |
-| 「不敢動的 module」list 變長 | technical debt 累積 |
-| Senior engineer 開始 burnout | 驗證壓力都壓在他們身上 |
+| Agent 想偷工，跳過某個 edge case | **Tests** 跑就 fail，PR 不能 merge |
+| Agent 不知道之前為何那樣設計，重蹈覆轍 | **Docs** 在 context 裡，agent 看得到「**weight rounding 為何要強制**」|
+| Agent 寫的新版品質爛 | **Evaluation 分數**對照，新版 5.3/10 < 舊版 6.8/10，明顯退步 |
 
-**3 個以上信號出現 → 立即啟動 ratchet defense**（[Ch 08 路線圖](08-implementation-roadmap.md)）。
+**這 3 樣同時在 context window，agent 沒辦法 regress**。
 
----
+而且**每 turn 都增加**——下一版 agent 又寫了更多 tests / docs / evals，下一輪沒辦法 regress 的範圍更大。
 
-## 反直覺洞察：限速 AI agent 是錯的
-
-很多 leader 看到 ratchet 問題，本能反應是「**那就限制 AI 寫程式速度**」。
-
-**錯**。理由：
-
-1. **競爭對手不會限速**——你限了你輸
-2. **AI 寫程式的價值就在速度**——限速等於放棄價值
-3. **限速不解決問題**——只是把棘輪轉慢、最終還是會咬
-
-**正確反應**：**升級驗證能力**。讓驗證速度也 10x。
-
-**怎麼讓驗證 10x**？答案是 [Ch 06](06-ai-as-test-writer.md)：**用 AI 寫測試**。
-
-> 棘輪轉得多快，驗證就要多快。
-> AI 加速生產 → AI 加速驗證。
-> 唯一不可加速的是「**人類做最終 judgment**」，所以人類的 judgment 要被用在最高槓桿的地方。
+**Quality floor 只能升不能降。Forward-only motion. That's the ratchet.**
 
 ---
 
-## 棘輪 vs Technical Debt 的差別
+## Garry 的具體案例：Holder Confusion（GBrain）
 
-| 維度 | Technical Debt | Complexity Ratchet |
+> 完整細節見 [Ch 00 原文](00-original-article.md#具體案例-1holder-confusiongbrain)
+
+| 階段 | 動作 | 對應 ratchet 3 樣 |
 |---|---|---|
-| 來源 | 人類 shortcuts | AI 過量產出 |
-| 速度 | 線性累積 | 指數累積 |
-| 可逆性 | 可重構還清 | 鎖住、不可逆 |
-| 主要表徵 | 程式碼變醜 | 行為變不可預測 |
-| 處理方式 | sprint 預算還債 | 驗證能力升級 |
+| V1 跑 100,720 個 claims | 抽取「誰相信什麼」 | （初始 baseline）|
+| Cross-model eval（GPT-5.5 + Claude） | 6.8/10 | **Evaluation** ✓ |
+| 找到 holder confusion（35% 認錯人） | 6 種 failure mode 文件化 | **Documentation** ✓ |
+| V2 prompt 改 + 17 個測試 | 鎖住合約 | **Tests** ✓ |
+| Weight rounding 在 DB layer 強制 | 不准 0.74 假精度 | (架構性保護) |
+| **結果** | 未來版本不能 regress | Quality floor 升 ✓ |
 
-Tech debt 是「**程式品質下降**」；ratchet 是「**驗證能力被超車**」。兩者都該管，但 ratchet 更危險，**因為它在 production 才現形**。
+**這就是「**一個 turn 的 ratchet**」**。下一次任何 agent 改這部分，**17 個測試會抓**，**6 種 failure mode 在 context**，**6.8/10 是品質地板**。
+
+無人需要記住「**為何 weight rounding 重要**」或「**holder confusion 是什麼**」。
+
+> **The tests remember.**
+> 「測試記得。」
+
+---
+
+## 為何這跟 Tech Debt 完全不同
+
+| 維度 | Tech Debt | Complexity Ratchet |
+|---|---|---|
+| **方向** | 壞東西累積 | 好基線累積 |
+| **目標** | 越少越好 | 越多越好 |
+| **可逆性** | 可重構還清 | Forward-only（這是 feature 不是 bug）|
+| **比喻** | 銀行利息 | 棘輪扳手 |
+| **產生原因** | 趕進度妥協 | 正常 development 自動產生 |
+| **管理方式** | Sprint 預算還債 | 把 3 樣納入 PR template |
+
+Garry 在原文沒直接對比這兩個，但這個區分是理解他論點的關鍵。**他不是在講「**怎麼管理 tech debt**」，是在講「**怎麼建立 quality 永遠 only up 的機制**」**。
+
+---
+
+## 反例：「Vibecoded」專案的死亡模式
+
+Garry 拿 Karpathy 提的 **vibecoding** 術語當反例：
+
+> *"Vibecoding" is Andrej Karpathy's term for coding with AI by describing what you want in natural language and letting the model generate the code. It's powerful and it's how I build.*
+
+但：
+
+> *Most vibecoded projects that skip tests start falling apart once they reach moderate complexity — a few thousand lines, a handful of interacting features.*
+
+**典型死法**：
+1. Skip tests, skip docs, skip evals
+2. Agent 加 complexity，沒東西防 regression
+3. 每個新 feature 有機率破壞 old feature
+4. 沒 test → user 報才知道
+5. V0.5 之後：「**haunted house**」（鬧鬼的房子）——每改一處壞別處
+6. 開發者寫部落格說「**AI coding 不行**」
+7. **Garry 反駁**：「**AI coding 沒問題，是他們沒造棘輪**」
+
+---
+
+## 棘輪不只用在傳統 code
+
+Garry 後段有個重要延伸：**Everything harnessable is testable**。
+
+不只 unit test。**只要能 observe，就能 assert，就能 ratchet**：
+
+| 層次 | 例子 |
+|---|---|
+| **OS** | migration 有建對表？cron 有 fire？ |
+| **Terminal** | AI agent 在 review 時有 ask question？|
+| **Browser** | 頁面 render？form 填對？|
+| **API** | JSON schema 對？|
+| **Agent behavioral** | agent 照 protocol？刪除前有確認？|
+
+Garry 親身案例：**TTY test harness**（見 [Ch 00](00-original-article.md#具體案例-2tty-test-harnessgstack)）——用 Bun TTY 功能 spawn Claude Code 進 pseudo-terminal，**監看 terminal output 確認 agent 有沒有 fire interactive question**。
+
+**「**這不是測 code，是測 AI agent 有沒有遵守行為合約。在 TTY 層級，真的看著它工作。**」**
+
+---
+
+## 為何 v1.0 寫錯了
+
+v1.0 我寫：「**部署一個 feature 就鎖住技術債只增**」。
+
+**錯在**：
+1. 方向錯——是品質升不是 debt 升
+2. 主體錯——主角是 **3 樣每 turn**，不是「部署 feature」
+3. 機制錯——是「**context window 載入 3 樣**」造成 agent 無法 regress，不是某種「不可逆部署」
+
+修正：用 [Ch 00 原文](00-original-article.md) 重新校準你的理解。**Garry 棘輪的精神是「optimistic」**（一切會越來越好），不是 v1.0 的「pessimistic」（debt 越來越多）。
 
 ---
 
 ## 本章小結
 
-| 觀念 | 為何重要 |
-|---|---|
-| 棘輪是「上得去下不來」的單向結構 | 解釋為何複雜度只增不減 |
-| AI agent 加速棘輪 10x | 看清為何過去的 testing playbook 不夠 |
-| 5 個 bite hardest 區域 | 知道把第一道防線蓋在哪 |
-| 6 個 inflection point 信號 | 自我診斷 |
-| 限速 AI 是錯的 | 正確的反應是升級驗證能力 |
-| ratchet ≠ tech debt | 兩個概念分開管 |
+| 觀念 | v1.0 描述 | v2.0 修正 |
+|---|---|---|
+| 棘輪方向 | ❌ 技術債只增 | ✅ 品質地板只升 |
+| 棘輪主體 | ❌ Feature deployment | ✅ 每次 agent session 加 3 樣 |
+| 棘輪機制 | ❌ Production 鎖住 | ✅ Context window 載入 3 樣防 regression |
+| 對 tech debt | ❌ 混為一談 | ✅ 完全不同概念 |
 
 ---
 
 ## 接下來
 
-➡️ [Chapter 02: 驗證瓶頸 — 從 production 搬到 verification](02-verification-bottleneck.md)
+➡️ [Chapter 02: 驗證瓶頸](02-verification-bottleneck.md)
+
+理解了「棘輪是 good thing」之後，下一章談「為何 AI 時代驗證能力跟不上產出能力」——這是 Garry 寫整篇文章的時代背景。
